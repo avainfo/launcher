@@ -229,6 +229,7 @@ impl<O: futures::Sink<Response> + Unpin> Service<O> {
                         Request::Complete(id) => self.complete(id).await,
                         Request::Context(id) => self.context(id).await,
                         Request::Quit(id) => self.quit(id).await,
+                        Request::Refresh(id) => self.refresh(id).await,
 
                         // When requested to exit, the service will forward that
                         // request to all of its plugins before exiting itself
@@ -254,6 +255,7 @@ impl<O: futures::Sink<Response> + Unpin> Service<O> {
 
                 Event::Response((plugin, response)) => match response {
                     PluginResponse::Append(item) => self.append(plugin, item),
+                    PluginResponse::Update(item) => self.update(plugin, item).await,
                     PluginResponse::Clear => self.clear(),
                     PluginResponse::Close => self.close().await,
                     PluginResponse::Context { id, options } => {
@@ -440,6 +442,32 @@ impl<O: futures::Sink<Response> + Unpin> Service<O> {
                 .sender_exec()
                 .send_async(Request::Quit(meta.id))
                 .await;
+        }
+    }
+
+    async fn refresh(&mut self, id: Indice) {
+        if let Some((plugin, meta)) = self.search_result(id as usize) {
+            let _res = plugin
+                .sender_exec()
+                .send_async(Request::Refresh(meta.id))
+                .await;
+        }
+    }
+
+    async fn update(&mut self, plugin: PluginKey, update: PluginSearchResult) {
+        let Some((_, item)) = self
+            .active_search
+            .iter_mut()
+            .find(|(plugin_id, item)| *plugin_id == plugin && item.id == update.id)
+        else {
+            return;
+        };
+
+        *item = update;
+
+        if self.awaiting_results.is_empty() {
+            let search_list = self.sort();
+            self.respond(Response::Update(search_list)).await;
         }
     }
 

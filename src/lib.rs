@@ -70,6 +70,8 @@ pub enum IconSource {
 pub enum PluginResponse {
     /// Append a new search item to the launcher.
     Append(PluginSearchResult),
+    /// Update an existing search item in the launcher.
+    Update(PluginSearchResult),
     /// Clear all results in the launcher list.
     Clear,
     /// Close the launcher.
@@ -154,6 +156,8 @@ pub enum Request {
     Interrupt,
     /// Request to close the selected item.
     Quit(Indice),
+    /// Refresh the selected result.
+    Refresh(Indice),
     /// Perform a search in our database.
     Search(String),
 }
