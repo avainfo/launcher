@@ -466,6 +466,10 @@ impl<O: futures::Sink<Response> + Unpin> Service<O> {
         *item = update;
 
         if self.awaiting_results.is_empty() {
+            if self.last_query.is_empty() {
+                self.no_sort = true;
+            }
+
             let search_list = self.sort();
             self.respond(Response::Update(search_list)).await;
         }
