@@ -52,6 +52,7 @@ pub async fn main() {
                             app.activate(id);
                         }
                         Request::Quit(id) => app.quit(id),
+                        Request::Refresh(id) => app.refresh(id),
                         Request::Search(query) => {
                             debug!("searching {query}");
                             app.search(&query).await;
@@ -251,5 +252,24 @@ impl<W: AsyncWrite + Unpin> App<W> {
 
         send(&mut self.tx, PluginResponse::Finished).await;
         let _ = self.tx.flush();
+    }
+
+    fn refresh(&mut self, id: u32) {
+        if self.ids_to_ignore.contains(&id) {
+            return;
+        }
+
+        if let Some(handle) = self.toplevels.iter().find_map(|t| {
+            if t.info.foreign_toplevel.id().protocol_id() == id {
+                Some(t.info.foreign_toplevel.clone())
+            } else {
+                None
+            }
+        }) {
+            debug!("refreshing thumbnail: {id}");
+            let _res = self
+                .calloop_tx
+                .send(ToplevelAction::RefreshThumbnail(handle));
+        }
     }
 }
