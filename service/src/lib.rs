@@ -761,6 +761,7 @@ mod tests {
                     description: "Reboot into BIOS".to_string(),
                     icon: None,
                     window: None,
+                    thumbnail: None,
                     exec: None,
                     keywords: Some(vec![
                         "bios".to_string(),
@@ -778,6 +779,7 @@ mod tests {
                     description: "Reboot the system".to_string(),
                     icon: None,
                     window: None,
+                    thumbnail: None,
                     exec: None,
                     keywords: Some(vec![
                         "power".to_string(),
