@@ -77,12 +77,13 @@ pub async fn main() {
                             window_id,
                             thumbnail,
                         } => {
-                            if let Some(toplevel) = app
-                                .toplevels
-                                .iter_mut()
-                                .find(|t| t.info.foreign_toplevel.id().protocol_id() == window_id)
-                            {
-                                toplevel.thumbnail = Some(thumbnail);
+                            if let Some(pos) = app.toplevels.iter().position(|t| {
+                                t.info.foreign_toplevel.id().protocol_id() == window_id
+                            }) {
+                                app.toplevels[pos].thumbnail = Some(thumbnail);
+
+                                let result = app.plugin_search_result(&app.toplevels[pos]);
+                                send(&mut app.tx, PluginResponse::Update(result)).await;
                             } else {
                                 debug!(
                                     "thumbnail update ignored: window_id={window_id}, no matching toplevel"
@@ -206,6 +207,33 @@ impl<W: AsyncWrite + Unpin> App<W> {
         }
     }
 
+    fn plugin_search_result(&self, info: &ToplevelEntry) -> PluginSearchResult {
+        let appid = fde::unicase::Ascii::new(info.info.app_id.as_str());
+
+        let entry = fde::find_app_by_id(&self.desktop_entries, appid)
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| fde::DesktopEntry::from_appid(appid.to_string()).to_owned());
+
+        let icon_name = if let Some(icon) = entry.icon() {
+            Cow::Owned(icon.to_owned())
+        } else {
+            Cow::Borrowed("application-x-executable")
+        };
+
+        let id = info.info.foreign_toplevel.id().protocol_id();
+
+        PluginSearchResult {
+            // XXX protocol id may be re-used later
+            id,
+            window: Some((0, id)),
+            thumbnail: info.thumbnail.clone(),
+            description: info.info.title.clone(),
+            name: get_description(&entry, &self.locales),
+            icon: Some(IconSource::Name(icon_name)),
+            ..Default::default()
+        }
+    }
+
     async fn search(&mut self, query: &str) {
         fn contains_pattern(needle: &str, haystack: &[&str]) -> bool {
             let needle = needle.to_ascii_lowercase();
@@ -224,28 +252,7 @@ impl<W: AsyncWrite + Unpin> App<W> {
                 continue;
             }
 
-            let appid = fde::unicase::Ascii::new(info.info.app_id.as_str());
-
-            let entry = fde::find_app_by_id(&self.desktop_entries, appid)
-                .map(ToOwned::to_owned)
-                .unwrap_or_else(|| fde::DesktopEntry::from_appid(appid.to_string()).to_owned());
-
-            let icon_name = if let Some(icon) = entry.icon() {
-                Cow::Owned(icon.to_owned())
-            } else {
-                Cow::Borrowed("application-x-executable")
-            };
-
-            let response = PluginResponse::Append(PluginSearchResult {
-                // XXX protocol id may be re-used later
-                id: info.info.foreign_toplevel.id().protocol_id(),
-                window: Some((0, info.info.foreign_toplevel.id().protocol_id())),
-                thumbnail: info.thumbnail.clone(),
-                description: info.info.title.clone(),
-                name: get_description(&entry, &self.locales),
-                icon: Some(IconSource::Name(icon_name)),
-                ..Default::default()
-            });
+            let response = PluginResponse::Append(self.plugin_search_result(info));
 
             send(&mut self.tx, response).await;
         }
